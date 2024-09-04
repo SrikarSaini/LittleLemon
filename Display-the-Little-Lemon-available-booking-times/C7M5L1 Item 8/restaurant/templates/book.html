@@ -1,0 +1,139 @@
+{% extends 'base.html' %} {% load static %} {% block content %}
+<section>
+  <article>
+    <h1>Make a reservation</h1>
+    <!--Begin row-->
+    <div class="row">
+      <!--Begin col-->
+      <div class="column">
+        <form method="POST" id="form">
+          {% csrf_token %}
+          <p>
+            <label for="first_name">Name:</label>
+            <input
+              type="text"
+              placeholder="Your Name"
+              maxlength="200"
+              required=""
+              id="first_name"
+              name="first_name"
+            />
+          </p>
+          <p>
+            <label for="reservation_date">Reservation Date:</label>
+            <input
+              type="date"
+              required=""
+              id="reservation_date"
+              name="reservation_date"
+            />
+          </p>
+
+          <p>
+            <label for="reservation_slot">Reservation time:</label>
+            <select id="reservation_slot" name="reservation_slot">
+              <option value="0" disabled>Select time</option>
+            </select>
+          </p>
+          <button type="submit" id="button">Reserve</button>
+        </form>
+      </div>
+      <!--End col-->
+
+      <!--Begin col-->
+      <div class="column">
+        <h2>Bookings For <span id="today"></span></h2>
+        <div id="bookings"></div>
+      </div>
+      <!--End col-->
+    </div>
+    <!--End row-->
+  </article>
+</section>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const today = new Date();
+    const day = today.toLocaleString("en-US", { day: "2-digit" });
+    const month = today.toLocaleString("en-US", { month: "2-digit" });
+    const year = today.getFullYear();
+    document.getElementById(
+      "reservation_date"
+    ).value = `${year}-${month}-${day}`;
+
+    getBookings(); // Initial load
+
+    document
+      .getElementById("reservation_date")
+      .addEventListener("change", getBookings);
+
+    function getBookings() {
+      const date = document.getElementById("reservation_date").value;
+      document.getElementById("today").innerHTML = date;
+
+      fetch("{% url 'bookings' %}?date=" + date)
+        .then((r) => r.json())
+        .then((data) => {
+          let reserved_slots = [];
+          let bookings = "";
+
+          for (let item of data) {
+            reserved_slots.push(item.fields.reservation_slot);
+            bookings += `<p>${item.fields.first_name} - ${formatTime(
+              item.fields.reservation_slot
+            )}</p>`;
+          }
+
+          let slot_options = '<option value="0" disabled>Select time</option>';
+          for (let i = 11; i < 20; i++) {
+            const label = formatTime(i);
+            if (reserved_slots.includes(i)) {
+              slot_options += `<option value=${i} disabled>${label}</option>`;
+            } else {
+              slot_options += `<option value=${i}>${label}</option>`;
+            }
+          }
+
+          document.getElementById("reservation_slot").innerHTML = slot_options;
+          document.getElementById("bookings").innerHTML =
+            bookings || "No bookings";
+        })
+        .catch((error) => {
+          console.error("Error fetching bookings:", error);
+        });
+    }
+
+    function formatTime(time) {
+      const ampm = time < 12 ? "AM" : "PM";
+      const t = time <= 12 ? time : time - 12;
+      return `${t} ${ampm}`;
+    }
+
+    document.getElementById("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const formdata = {
+        first_name: document.getElementById("first_name").value,
+        reservation_date: document.getElementById("reservation_date").value,
+        reservation_slot: document.getElementById("reservation_slot").value,
+      };
+
+      fetch("{% url 'bookings' %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]")
+            .value,
+        },
+        body: JSON.stringify(formdata),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          getBookings();
+        })
+        .catch((error) => {
+          console.error("Error submitting form:", error);
+        });
+    });
+  });
+</script>
+{% endblock %}
